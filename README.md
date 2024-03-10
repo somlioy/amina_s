@@ -47,12 +47,9 @@ The `alarms` attribute is an array which can hold any combination of the followi
 | Critical overcurrent alarm |
 
 
+## Installation
 
-## Installation (Zigbee2mqtt stand-alone)
-
-Please see https://www.zigbee2mqtt.io/guide/configuration/more-config-options.html#external-converters for how to install the external converter.
-
-## Installation (Zigbee2mqtt Home Asisstant add-on)
+https://www.zigbee2mqtt.io/guide/configuration/more-config-options.html#external-converters
 
 1. In your `zigbee2mqtt` data folder, next to the `configuration.yaml` file, add `amina_s.js`.
 2. Open your Zigbee2MQTT addon Web UI, navigate to settings, then external converters
