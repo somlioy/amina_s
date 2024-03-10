@@ -1,6 +1,9 @@
 # amina_s
 Zigbee2MQTT external converter for Amina S EV Charger
 
+Created by @somlioy
+
+
 |     |     |
 |-----|-----|
 | Model | amina S  |
@@ -11,11 +14,39 @@ Zigbee2MQTT external converter for Amina S EV Charger
 
 
 The EV Charger requires atleast firmware version 1.5.3 to have support of every expose of this external converter.
-You can check the firmware version by reading the `swBuildId` attribute in cluster `genBasic`, endpoint 10 after pairing, by using the Dev console in Zigbee2MQTT.
+You can check the firmware version by reading the `swBuildId` attribute in cluster `genBasic`, endpoint `10` after pairing, by using the Dev console in Zigbee2MQTT.
 
-As of now, the exposes total_active_energy and last_session_energy is not updated automatically as the attributes are not reportable.
+As of now, the exposes `total_active_energy` and `last_session_energy` is not updated automatically as the attributes are not reportable.
 
-Created by @somlioy
+The `ev_status` attribute is an enum which can be any of the following values:
+
+| `ev_status` |
+| --- |
+| Unknown status: *#status*
+| Not connected |
+| EV Connected |
+| Ready to charge |
+| Charging |
+| Paused |
+
+Where `#status` is the bit coded integer recieved from the device.
+
+The `alarms` attribute is an array which can hold any combination of the following values:
+
+| `alarms` |
+| --- |
+| Welded relay(s) |
+| Wrong voltage balance |
+| RDC-DD DC Leakage |
+| RDC-DD AC Leakage |
+| Temperature error |
+| Overvoltage alarm |
+| Overcurrent alarm |
+| Car communication error |
+| Charger processing error |
+| Critical overcurrent alarm |
+
+
 
 ## Installation (Zigbee2mqtt stand-alone)
 

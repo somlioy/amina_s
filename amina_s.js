@@ -75,7 +75,12 @@
                         0b0111: 'Charging', 
                         0b1011: 'Paused'
                     };
-                    result.ev_status = utils.getFromLookup(msg.data["3"] & 0x0F, connectStatusLookup);
+
+                    try {
+                        result.ev_status = utils.getFromLookup(msg.data["3"] & 0x0F, connectStatusLookup);
+                    } catch (e) {
+                        result.ev_status = 'Unknown Status: ' + msg.data["3"];
+                    }
 
                     result.derating = (msg.data[Amina_S_Control.ev_status] >> 0x0F) & 0x01;
                 }
