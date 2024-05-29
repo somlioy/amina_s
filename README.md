@@ -1,6 +1,8 @@
 # amina_s
 Zigbee2MQTT external converter for Amina S EV Charger
 
+Currently tested on Z2M 1.37.1
+
 Created by @somlioy
 
 
@@ -9,7 +11,7 @@ Created by @somlioy
 | Model | amina S  |
 | Vendor  | amina distribution AS  |
 | Description | Amina S EV Charger |
-| Exposes | state, charge_limit, ev_status, power, current, total_active_energy, last_session_energy, alarms, alarm_active, ac_frequency, voltage, voltage_phase_b, voltage_phase_c, current_phase_b, current_phase_c, linkquality |
+| Exposes | state, charge_limit, ev_status, power, current, total_active_energy, last_session_energy, alarms, alarm_active, voltage, linkquality |
 | Picture | ![Amina S](amina_s.png) |
 
 
