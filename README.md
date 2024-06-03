@@ -18,6 +18,9 @@ Created by @somlioy
 The EV Charger requires atleast firmware version 1.5.3 to have support of every expose of this external converter.
 You can check the firmware version by reading the `swBuildId` attribute in cluster `genBasic`, endpoint `10` after pairing, by using the Dev console in Zigbee2MQTT.
 
+New firmware and firmware update guide can be found here: https://doc.clickup.com/9004130215/p/h/8cb07x7-30795/12688a97b1dfa55
+
+
 As of now, the exposes `total_active_energy` and `last_session_energy` is not updated automatically as the attributes are not reportable.
 
 The `ev_status` attribute is an enum which can be any of the following values:
