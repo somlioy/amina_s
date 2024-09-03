@@ -2,10 +2,8 @@ const {deviceAddCustomCluster, onOff, binary, numeric, enumLookup, electricityMe
 const fz = require('zigbee-herdsman-converters/converters/fromZigbee');
 const tz = require('zigbee-herdsman-converters/converters/toZigbee');
 const exposes = require('zigbee-herdsman-converters/lib/exposes');
-const reporting = require('zigbee-herdsman-converters/lib/reporting');
 const utils = require('zigbee-herdsman-converters/lib/utils');
 const ota = require('zigbee-herdsman-converters/lib/ota');
-const constants = require('zigbee-herdsman-converters/lib/constants');
 const e = exposes.presets;
 const ea = exposes.access;
 
@@ -13,10 +11,16 @@ const aminaManufacturer = {manufacturerCode: 0x143B};
 
 const Amina_S_Control = {
     cluster: 0xFEE7,
-    max_current_level: 0x00,
     alarms: 0x02,
     ev_status: 0x03,
+    // Coming features start
     connect_status: 0x04,
+    single_phase: 0x05,
+    offline_current: 0x06,
+    offline_single_phase: 0x07,
+    time_to_offline: 0x08,
+    enable_offline: 0x09,
+    // Coming features end
     total_active_energy: 0x10,
     last_session_energy: 0x11,
 }
@@ -88,11 +92,48 @@ const tzLocal = {
         
         convertGet: async (entity, key, meta) => {
             const endpoint = entity.getDevice().getEndpoint(10);
-            if (key === 'charge_limit') {
-                await endpoint.read('genLevelCtrl', ['currentLevel'], aminaManufacturer);
-            }
+            await endpoint.read('genLevelCtrl', ['currentLevel'], aminaManufacturer);
         },
     },
+
+    // To be removed with introduction of threePhase electricalMeasurement modernExtend
+    power_phase_b: {
+        key: ['power_phase_b'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['activePowerPhB']);
+        },
+    },
+    power_phase_c: {
+        key: ['power_phase_c'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['activePowerPhC']);
+        },
+    },
+    acvoltage_phase_b: {
+        key: ['voltage_phase_b'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['rmsVoltagePhB']);
+        },
+    },
+    acvoltage_phase_c: {
+        key: ['voltage_phase_c'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['rmsVoltagePhC']);
+        },
+    },
+    accurrent_phase_b: {
+        key: ['current_phase_b'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['rmsCurrentPhB']);
+        },
+    },
+    accurrent_phase_c: {
+        key: ['current_phase_c'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('haElectricalMeasurement', ['rmsCurrentPhC']);
+        },
+    },
+    // To be removed END
 };
 
 const definition = {
@@ -100,17 +141,34 @@ const definition = {
     model: 'amina S',
     vendor: 'Amina Distribution AS',
     description: 'Amina S EV Charger',
-    //ota: ota.zigbeeOTA,
-    fromZigbee: [fzLocal.charge_limit, fzLocal.amina_s],
-    toZigbee: [tzLocal.amina_s],
+    ota: ota.zigbeeOTA,
+    fromZigbee: [fzLocal.charge_limit, fz.electrical_measurement, fzLocal.amina_s],
+    toZigbee: [tzLocal.amina_s,
+        // To be removed with introduction of threePhase electricalMeasurement modernExtend
+        tzLocal.power_phase_b, tzLocal.power_phase_c,
+        tzLocal.accurrent_phase_b, tzLocal.accurrent_phase_c, 
+        tzLocal.acvoltage_phase_b, tzLocal.acvoltage_phase_c,
+    ],
     exposes: [e.numeric('charge_limit', ea.ALL).withUnit('A')
-                .withValueMin(6).withValueMax(32).withValueStep(1)
+                .withValueMin(6).withValueMax(32).withValueStep(1) // Could min and max be read from level control cluster minLevel and MaxLevel
                 .withDescription('Maximum allowed amperage draw'),
             e.numeric('alarms', ea.STATE).withDescription('Alarms reported by EV Charger'),
             e.binary('alarm_active', ea.STATE, 'true', 'false').withDescription('An active alarm is present'),
+
+            // To be removed with introduction of threePhase electricalMeasurement modernExtend
+            e.power_phase_b().withAccess(ea.STATE_GET),
+            e.current_phase_b().withAccess(ea.STATE_GET),
+            e.voltage_phase_b().withAccess(ea.STATE_GET),
+            e.power_phase_c().withAccess(ea.STATE_GET),
+            e.current_phase_c().withAccess(ea.STATE_GET),
+            e.voltage_phase_c().withAccess(ea.STATE_GET),    
         ],
 
     extend: [
+        electricityMeter({
+            cluster: 'electrical',
+            // threePhase: true,
+        }),
         deviceAddCustomCluster(
             'aminaControlCluster',
             {
@@ -119,7 +177,14 @@ const definition = {
                 attributes: {
                     alarms: {ID: Amina_S_Control.alarms, type: DataType.bitmap16},
                     evStatus: {ID: Amina_S_Control.ev_status, type: DataType.bitmap16},
-                    connectStatus: {ID: Amina_S_Control.connect_status, type: DataType.bitmap16}, // Not implemented?
+                    // Coming features start
+                    connectStatus: {ID: Amina_S_Control.connect_status, type: DataType.bitmap16},
+                    singlePhase: {ID: Amina_S_Control.single_phase, type: DataType.uint8},
+                    offlineCurrent: {ID: Amina_S_Control.offline_current, type: DataType.uint8},
+                    offlineSinglePhase: {ID: Amina_S_Control.offline_single_phase, type: DataType.uint8},
+                    timeToOffline: {ID: Amina_S_Control.time_to_offline, type: DataType.uint16},
+                    enableOffline: {ID: Amina_S_Control.enable_offline, type: DataType.uint8},
+                    // Coming features end
                     totalActiveEnergy: {ID: Amina_S_Control.total_active_energy, type: DataType.uint32},
                     lastSessionEnergy: {ID: Amina_S_Control.last_session_energy, type: DataType.uint32},
                 },
@@ -158,11 +223,6 @@ const definition = {
             unit: 'Wh',
             access: 'STATE_GET',
         }),
-        
-        electricityMeter({
-            'cluster': 'electrical'
-        }),
-        
     ],
 
     endpoint: (device) => {
@@ -172,10 +232,17 @@ const definition = {
     configure: async (device, coordinatorEndpoint, logger) => {
         const endpoint = device.getEndpoint(10);
 
-        await endpoint.read(Amina_S_Control.cluster, [// Amina_S_Control.max_current_level, // Not implemented?
+        await endpoint.read(Amina_S_Control.cluster, [
                                                     Amina_S_Control.alarms,
                                                     Amina_S_Control.ev_status,
                                                     Amina_S_Control.connect_status,
+                                                    /* Future functions
+                                                    Amina_S_Control.single_phase,
+                                                    Amina_S_Control.offline_current,
+                                                    Amina_S_Control.offline_single_phase,
+                                                    Amina_S_Control.time_to_offline,
+                                                    Amina_S_Control.enable_offline,
+                                                    */
                                                     Amina_S_Control.total_active_energy,
                                                     Amina_S_Control.last_session_energy
                                                     ]);
