@@ -85,6 +85,7 @@ const tzLocal = {
             await endpoint.read('genLevelCtrl', ['currentLevel'], aminaManufacturer);
         },
     },
+  
 
     total_active_power: {
         key: ['total_active_power'],
@@ -106,7 +107,7 @@ const definition = {
                 .withValueMin(6).withValueMax(32).withValueStep(1) // Could min and max be read from level control cluster minLevel and MaxLevel
                 .withDescription('Maximum allowed amperage draw'),
             e.numeric('alarms', ea.STATE).withDescription('Alarms reported by EV Charger'),
-            e.binary('alarm_active', ea.STATE, 'true', 'false').withDescription('An active alarm is present')
+            e.binary('alarm_active', ea.STATE, 'true', 'false').withDescription('An active alarm is present'),
         ],
 
     extend: [
