@@ -85,51 +85,13 @@ const tzLocal = {
             await endpoint.read('genLevelCtrl', ['currentLevel'], aminaManufacturer);
         },
     },
-
-    // To be removed with introduction of threePhase electricalMeasurement modernExtend
+  
     total_active_power: {
         key: ['total_active_power'],
         convertGet: async (entity, key, meta) => {
             await entity.read('haElectricalMeasurement', ['totalActivePower']);
         },
     },
-    power_phase_b: {
-        key: ['power_phase_b'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['activePowerPhB']);
-        },
-    },
-    power_phase_c: {
-        key: ['power_phase_c'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['activePowerPhC']);
-        },
-    },
-    acvoltage_phase_b: {
-        key: ['voltage_phase_b'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['rmsVoltagePhB']);
-        },
-    },
-    acvoltage_phase_c: {
-        key: ['voltage_phase_c'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['rmsVoltagePhC']);
-        },
-    },
-    accurrent_phase_b: {
-        key: ['current_phase_b'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['rmsCurrentPhB']);
-        },
-    },
-    accurrent_phase_c: {
-        key: ['current_phase_c'],
-        convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['rmsCurrentPhC']);
-        },
-    },
-    // To be removed END
 };
 
 const definition = {
@@ -139,32 +101,18 @@ const definition = {
     description: 'Amina S EV Charger',
     ota: ota.zigbeeOTA,
     fromZigbee: [fzLocal.charge_limit, fz.electrical_measurement, fzLocal.amina_s],
-    toZigbee: [tzLocal.charge_limit,
-        // To be removed with introduction of threePhase electricalMeasurement modernExtend
-        tzLocal.total_active_power,
-        tzLocal.power_phase_b, tzLocal.power_phase_c,
-        tzLocal.accurrent_phase_b, tzLocal.accurrent_phase_c, 
-        tzLocal.acvoltage_phase_b, tzLocal.acvoltage_phase_c,
-    ],
+    toZigbee: [tzLocal.amina_s, tzLocal.total_active_power],
     exposes: [e.numeric('charge_limit', ea.ALL).withUnit('A')
                 .withValueMin(6).withValueMax(32).withValueStep(1) // Could min and max be read from level control cluster minLevel and MaxLevel
                 .withDescription('Maximum allowed amperage draw'),
             e.numeric('alarms', ea.STATE).withDescription('Alarms reported by EV Charger'),
             e.binary('alarm_active', ea.STATE, 'true', 'false').withDescription('An active alarm is present'),
-
-            // To be removed with introduction of threePhase electricalMeasurement modernExtend
-            e.power_phase_b().withAccess(ea.STATE_GET),
-            e.current_phase_b().withAccess(ea.STATE_GET),
-            e.voltage_phase_b().withAccess(ea.STATE_GET),
-            e.power_phase_c().withAccess(ea.STATE_GET),
-            e.current_phase_c().withAccess(ea.STATE_GET),
-            e.voltage_phase_c().withAccess(ea.STATE_GET),    
         ],
 
     extend: [
         electricityMeter({
             cluster: 'electrical',
-            // threePhase: true,
+            threePhase: true,
         }),
 
         deviceAddCustomCluster(
