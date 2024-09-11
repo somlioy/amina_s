@@ -1,7 +1,7 @@
 # amina_s
 Zigbee2MQTT external converter for Amina S EV Charger
 
-Currently tested on Z2M 1.37.1
+Currently tested on Z2M 1.40.1
 
 Created by @somlioy
 
@@ -11,11 +11,11 @@ Created by @somlioy
 | Model | amina S  |
 | Vendor  | amina distribution AS  |
 | Description | Amina S EV Charger |
-| Exposes | state, charge_limit, ev_status, power, current, total_active_energy, last_session_energy, alarms, alarm_active, voltage, linkquality |
+| Exposes | charge_limit, alarms, alarm_active, power, voltage, current, power_phase_b, power_phase_c, voltage_phase_b, voltage_phase_c, current_phase_b, current_phase_c, state, ev_status, total_active_power, total_active_energy, last_session_energy, single_phase, enable_offline, time_to_offline, offline_current, offline_single_phase, linkquality |
 | Picture | ![Amina S](amina_s.png) |
 
 
-The EV Charger requires atleast firmware version 1.5.3 to have support of every expose of this external converter.
+The EV Charger requires atleast firmware version 1.8.7 to have support of every expose of this external converter.
 You can check the firmware version by reading the `swBuildId` attribute in cluster `genBasic`, endpoint `10` after pairing, by using the Dev console in Zigbee2MQTT.
 
 New firmware and firmware update guide can be found here: https://doc.clickup.com/9004130215/p/h/8cb07x7-30795/12688a97b1dfa55
