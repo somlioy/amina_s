@@ -23,6 +23,8 @@ New firmware and firmware update guide can be found here: https://doc.clickup.co
 
 As of now, the exposes `total_active_energy` and `last_session_energy` is not updated automatically as the attributes are not reportable.
 
+Make sure that the following binds are enabled under Amina device - Bind: `genBasic`, `genOnOff`, `haElectricalMeasurement`, `genLevelCtrl`, `aminaControlCluster`
+
 The `ev_status` attribute is an enum which can be any of the following values:
 
 | `ev_status` |
