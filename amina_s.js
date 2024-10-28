@@ -1,14 +1,15 @@
-const {deviceAddCustomCluster, onOff, binary, numeric, enumLookup, electricityMeter} = require('zigbee-herdsman-converters/lib/modernExtend');
-const fz = require('zigbee-herdsman-converters/converters/fromZigbee');
+const {deviceAddCustomCluster, onOff, binary, numeric, electricityMeter} = require('zigbee-herdsman-converters/lib/modernExtend');
+const reporting = require('zigbee-herdsman-converters/lib/reporting');
+const constants = require('zigbee-herdsman-converters/lib/constants');
 const exposes = require('zigbee-herdsman-converters/lib/exposes');
 const utils = require('zigbee-herdsman-converters/lib/utils');
 const ota = require('zigbee-herdsman-converters/lib/ota');
 const e = exposes.presets;
 const ea = exposes.access;
 
-const aminaManufacturer = {manufacturerCode: 0x143B};
+const manufacturerOptions = {manufacturerCode: 0x143B};
 
-const Amina_S_Control = {
+const aminaControlAttributes = {
     cluster: 0xFEE7,
     alarms: 0x02,
     ev_status: 0x03,
@@ -22,75 +23,105 @@ const Amina_S_Control = {
     last_session_energy: 0x11,
 }
 
-const Amina_S_Alarms = ['Welded relay(s)', 'Wrong voltage balance', 'RDC-DD DC Leakage', 'RDC-DD AC Leakage', 
+const aminaAlarms = ['Welded relay(s)', 'Wrong voltage balance', 'RDC-DD DC Leakage', 'RDC-DD AC Leakage', 
                         'Temperature error', 'Overvoltage alarm', 'Overcurrent alarm', 'Car communication error',
-                        'Charger processing error', 'Critical overcurrent alarm'];
+                        'Charger processing error', 'Critical overcurrent alarm', 'Critical powerloss',];
 
 const DataType = {
-    uint32: 35,
-    uint16: 33,
-    uint8: 0x20,
-    enum8: 0x30,
-    bitmap16: 25,
+    UINT32: 35,
+    UINT16: 33,
+    UINT8: 0x20,
+    ENUM8: 0x30,
+    BITMAP16: 25,
 }
 
 const fzLocal = {
-    charge_limit: {
-        cluster: "genLevelCtrl",
-        type: ["attributeReport", "readResponse"],
+    ev_status: {
+        cluster: 'aminaControlCluster',
+        type: ['attributeReport', 'readResponse'],
         convert: (model, msg, publish, options, meta) => {
             const result = {};
-            if (msg.data.hasOwnProperty("currentLevel")) {
-                result.charge_limit = msg.data["currentLevel"];
+
+            if (msg.data.evStatus !== undefined) {
+                let statusText = '';
+                const evStatus = msg.data['evStatus'];
+
+                result.ev_connected = (evStatus & (1 << 0)) !== 0;
+                if (result.ev_connected) {
+                    statusText = 'EV Connected';
+                } else {
+                    statusText = 'Not Connected';
+                }
+                if ((evStatus & (1 << 1)) !== 0) statusText = 'Ready to charge';
+                if ((evStatus & (1 << 2)) !== 0) statusText = 'Charging';
+                if ((evStatus & (1 << 3)) !== 0) statusText = 'Charging Paused';
+
+                result.derated = (evStatus & (1 << 15)) !== 0;
+                if (result.derated) statusText += ', Derated';
+
+                result.ev_status = statusText;
+
+                return result;
             }
-            
-            return result;
         },
     },
 
-    amina_s: {
+    alarms: {
         cluster: 'aminaControlCluster',
-        type: ["attributeReport", "readResponse"],
+        type: ['attributeReport', 'readResponse'],
         convert: (model, msg, publish, options, meta) => {
             const result = {};
-            
-            if (msg.data.hasOwnProperty('alarms')) {
+
+            if (msg.data.alarms !== undefined) {
                 result.alarms = [];
                 result.alarm_active = false;
 
-                for (let i = 0; i < Amina_S_Alarms.length; i++){
+                for (let i = 0; i < 16; i++) {
                     if ((msg.data['alarms'] >> i) & 0x01) {
-                        result.alarms.push(Amina_S_Alarms[i]);
+                        let alarm = aminaAlarms[i];
+                        if (alarm === undefined) {
+                            alarm = `Unknown Alarm bit #${i}`;
+                        }
+
+                        result.alarms.push(alarm);
                         result.alarm_active = true;
                     }
                 }
+
+                if (result.alarm_active === false) {
+                    result.alarms = 'No Alarm';
+                }
+
+                return result;
             }
- 
-            return result;
         },
-    },
+    }
 };
 
 const tzLocal = {
     charge_limit: {
         key: ['charge_limit'],
         convertSet: async (entity, key, value, meta) => {
-            const endpoint = entity.getDevice().getEndpoint(10);
             const payload = {level: value, transtime: 0};
-            await endpoint.command('genLevelCtrl', 'moveToLevel', payload, utils.getOptions(meta.mapped, entity));
+            await entity.command('genLevelCtrl', 'moveToLevel', payload, utils.getOptions(meta.mapped, entity));
         },
-        
+
         convertGet: async (entity, key, meta) => {
-            const endpoint = entity.getDevice().getEndpoint(10);
-            await endpoint.read('genLevelCtrl', ['currentLevel'], aminaManufacturer);
+            await entity.read('genLevelCtrl', ['currentLevel'], manufacturerOptions);
         },
     },
-  
 
-    total_active_power: {
-        key: ['total_active_power'],
+    ev_status: {
+        key: ['ev_status'],
         convertGet: async (entity, key, meta) => {
-            await entity.read('haElectricalMeasurement', ['totalActivePower']);
+            await entity.read('aminaControlCluster', ['evStatus'], manufacturerOptions);
+        },
+    },
+
+    alarms: {
+        key: ['alarms'],
+        convertGet: async (entity, key, meta) => {
+            await entity.read('aminaControlCluster', ['alarms'], manufacturerOptions);
         },
     },
 };
@@ -99,57 +130,50 @@ const definition = {
     zigbeeModel: ['amina S'],
     model: 'amina S',
     vendor: 'Amina Distribution AS',
-    description: 'Amina S EV Charger',
+    description: 'Amina S EV Charger CUSTOM',
     ota: ota.zigbeeOTA,
-    fromZigbee: [fzLocal.charge_limit, fz.electrical_measurement, fzLocal.amina_s],
-    toZigbee: [tzLocal.charge_limit, tzLocal.total_active_power ],
-    exposes: [e.numeric('charge_limit', ea.ALL).withUnit('A')
-                .withValueMin(6).withValueMax(32).withValueStep(1) // Could min and max be read from level control cluster minLevel and MaxLevel
-                .withDescription('Maximum allowed amperage draw'),
-            e.numeric('alarms', ea.STATE).withDescription('Alarms reported by EV Charger'),
-            e.binary('alarm_active', ea.STATE, 'true', 'false').withDescription('An active alarm is present'),
-        ],
+    fromZigbee: [fzLocal.ev_status, fzLocal.alarms],
+    toZigbee: [tzLocal.ev_status, tzLocal.alarms, tzLocal.charge_limit],
+    exposes: [
+        e.text('ev_status', ea.STATE_GET).withDescription('Current charging status'),
+        e.text('alarms', ea.STATE_GET).withDescription('Alarms reported by EV Charger'),
+    ],
 
     extend: [
-        electricityMeter({
-            cluster: 'electrical',
-            threePhase: true,
+        deviceAddCustomCluster('aminaControlCluster', {
+            ID: aminaControlAttributes.cluster,
+            manufacturerCode: manufacturerOptions.manufacturerCode,
+            attributes: {
+                alarms: {ID: aminaControlAttributes.alarms, type: DataType.BITMAP16},
+                evStatus: {ID: aminaControlAttributes.ev_status, type: DataType.BITMAP16},
+                connectStatus: {ID: aminaControlAttributes.connect_status, type: DataType.BITMAP16},
+                singlePhase: {ID: aminaControlAttributes.single_phase, type: DataType.UINT8},
+                offlineCurrent: {ID: aminaControlAttributes.offline_current, type: DataType.UINT8},
+                offlineSinglePhase: {ID: aminaControlAttributes.offline_single_phase, type: DataType.UINT8},
+                timeToOffline: {ID: aminaControlAttributes.time_to_offline, type: DataType.UINT16},
+                enableOffline: {ID: aminaControlAttributes.enable_offline, type: DataType.UINT8},
+                totalActiveEnergy: {ID: aminaControlAttributes.total_active_energy, type: DataType.UINT32},
+                lastSessionEnergy: {ID: aminaControlAttributes.last_session_energy, type: DataType.UINT32},
+            },
+            commands: {},
+            commandsResponse: {},
         }),
-
-        deviceAddCustomCluster(
-            'aminaControlCluster',
-            {
-                ID: Amina_S_Control.cluster,
-                manufacturerCode: aminaManufacturer,
-                attributes: {
-                    alarms: {ID: Amina_S_Control.alarms, type: DataType.bitmap16},
-                    evStatus: {ID: Amina_S_Control.ev_status, type: DataType.bitmap16},
-                    connectStatus: {ID: Amina_S_Control.connect_status, type: DataType.bitmap16},
-                    singlePhase: {ID: Amina_S_Control.single_phase, type: DataType.uint8},
-                    offlineCurrent: {ID: Amina_S_Control.offline_current, type: DataType.uint8},
-                    offlineSinglePhase: {ID: Amina_S_Control.offline_single_phase, type: DataType.uint8},
-                    timeToOffline: {ID: Amina_S_Control.time_to_offline, type: DataType.uint16},
-                    enableOffline: {ID: Amina_S_Control.enable_offline, type: DataType.uint8},
-                    totalActiveEnergy: {ID: Amina_S_Control.total_active_energy, type: DataType.uint32},
-                    lastSessionEnergy: {ID: Amina_S_Control.last_session_energy, type: DataType.uint32},
-                },
-                commands: {},
-                commandsResponse: {},
-            }
-        ),
 
         onOff({
-            'powerOnBehavior': false,
+            powerOnBehavior: false,
         }),
 
-        enumLookup({
-            name: 'ev_status',
-            cluster: 'aminaControlCluster',
-            attribute: 'evStatus',
-            lookup: {'Not Connected': 0, 'EV Connected': 1, 'Ready to Charge': 3, 'Charging': 7, 'Paused': 11},
-            description: 'Current charging status',
-            reporting: {min: 0, max: '1_MINUTE', change: 1},
-            access: 'STATE_GET',
+        numeric({
+            name: 'charge_limit',
+            cluster: 'genLevelCtrl',
+            attribute: 'currentLevel',
+            description: 'Maximum allowed amperage draw',
+            reporting: {min: 0, max: 'MAX', change: 1},
+            unit: 'A',
+            valueMin: 6,
+            valueMax: 32,
+            valueStep: 1,
+            access: 'ALL',
         }),
 
         numeric({
@@ -157,7 +181,7 @@ const definition = {
             cluster: 'haElectricalMeasurement',
             attribute: 'totalActivePower',
             description: 'Instantaneous measured total active power',
-            reporting: {min: 0, max: '1_MINUTE', change: 10},
+            reporting: {min: '10_SECONDS', max: 'MAX', change: 10},
             unit: 'kW',
             scale: 1000,
             precision: 2,
@@ -169,7 +193,7 @@ const definition = {
             cluster: 'aminaControlCluster',
             attribute: 'totalActiveEnergy',
             description: 'Sum of consumed energy',
-            reporting: {min: 0, max: '1_MINUTE', change: 10},
+            //reporting: {min: '10_SECONDS', max: 'MAX', change: 5}, // Not Reportable atm
             unit: 'kWh',
             scale: 1000,
             precision: 2,
@@ -181,11 +205,47 @@ const definition = {
             cluster: 'aminaControlCluster',
             attribute: 'lastSessionEnergy',
             description: 'Sum of consumed energy last session',
-            reporting: {min: 0, max: '1_MINUTE', change: 10},
+            //reporting: {min: '10_SECONDS', max: 'MAX', change: 5}, // Not Reportable atm
             unit: 'kWh',
             scale: 1000,
             precision: 2,
             access: 'STATE_GET',
+        }),
+
+        binary({
+            name: 'ev_connected',
+            cluster: 'aminaControlCluster',
+            attribute: 'evConnected',
+            description: 'An EV is connected to the charger',
+            valueOn: ['True', 1],
+            valueOff: ['False', 0],
+            access: 'STATE',
+        }),
+
+        binary({
+            name: 'derated',
+            cluster: 'aminaControlCluster',
+            attribute: 'derated',
+            description: 'Charging derated due to high temperature',
+            valueOn: ['True', 1],
+            valueOff: ['False', 0],
+            access: 'STATE',
+        }),
+
+        binary({
+            name: 'alarm_active',
+            cluster: 'aminaControlCluster',
+            attribute: 'alarmActive',
+            description: 'An active alarm is present',
+            valueOn: ['True', 1],
+            valueOff: ['False', 0],
+            access: 'STATE',
+        }),
+
+        electricityMeter({
+            cluster: 'electrical',
+            acFrequency: true,
+            threePhase: true,
         }),
 
         binary({
@@ -223,7 +283,7 @@ const definition = {
         numeric({
             name: 'offline_current',
             cluster: 'aminaControlCluster',
-            attribute:  'offlineCurrent',
+            attribute: 'offlineCurrent',
             description: 'Maximum allowed amperage draw when device is offline',
             valueMin: 6,
             valueMax: 32,
@@ -244,26 +304,46 @@ const definition = {
     ],
 
     endpoint: (device) => {
-        return {'default': 10};
+        return {default: 10};
     },
 
-    configure: async (device, coordinatorEndpoint, logger) => {
+    configure: async (device, coordinatorEndpoint) => {
         const endpoint = device.getEndpoint(10);
 
-        await endpoint.read(Amina_S_Control.cluster, [
-                                                    Amina_S_Control.alarms,
-                                                    Amina_S_Control.ev_status,
-                                                    Amina_S_Control.connect_status,
-                                                    Amina_S_Control.single_phase,
-                                                    Amina_S_Control.offline_current,
-                                                    Amina_S_Control.offline_single_phase,
-                                                    Amina_S_Control.time_to_offline,
-                                                    Amina_S_Control.enable_offline,
-                                                    Amina_S_Control.total_active_energy,
-                                                    Amina_S_Control.last_session_energy
-                                                    ]);
-    },
+        const binds = ['genBasic', 'genOnOff', 'haElectricalMeasurement', 'genLevelCtrl', 'aminaControlCluster'];
+        await reporting.bind(endpoint, coordinatorEndpoint, binds);
 
+        await endpoint.configureReporting('aminaControlCluster', [
+            {
+                attribute: 'evStatus',
+                minimumReportInterval: 0,
+                maximumReportInterval: constants.repInterval.MAX,
+                reportableChange: 1,
+            },
+        ]);
+
+        await endpoint.configureReporting('aminaControlCluster', [
+            {
+                attribute: 'alarms',
+                minimumReportInterval: 0,
+                maximumReportInterval: constants.repInterval.MAX,
+                reportableChange: 1,
+            },
+        ]);
+
+        await endpoint.read('aminaControlCluster', [
+            'alarms',
+            'evStatus',
+            'connectStatus',
+            'singlePhase',
+            'offlineCurrent',
+            'offlineSinglePhase',
+            'timeToOffline',
+            'enableOffline',
+            'totalActiveEnergy',
+            'lastSessionEnergy',
+        ]);
+    },
 };
 
 module.exports = definition;
