@@ -43,21 +43,19 @@ const fzLocal = {
             const result = {};
 
             if (msg.data.evStatus !== undefined) {
-                let statusText = '';
+                let statusText = 'Not Connected';
                 const evStatus = msg.data['evStatus'];
 
                 result.ev_connected = (evStatus & (1 << 0)) !== 0;
-                if (result.ev_connected) {
-                    statusText = 'EV Connected';
-                } else {
-                    statusText = 'Not Connected';
-                }
+                result.charging = (evStatus & (1 << 2)) !== 0;
+                result.derated = (evStatus & (1 << 15)) !== 0;
+
+                if (result.ev_connected === true) statusText = 'EV Connected';
                 if ((evStatus & (1 << 1)) !== 0) statusText = 'Ready to charge';
-                if ((evStatus & (1 << 2)) !== 0) statusText = 'Charging';
+                if (result.charging === true) statusText = 'Charging';
                 if ((evStatus & (1 << 3)) !== 0) statusText = 'Charging Paused';
 
-                result.derated = (evStatus & (1 << 15)) !== 0;
-                if (result.derated) statusText += ', Derated';
+                if (result.derated === true) statusText += ', Derated';
 
                 result.ev_status = statusText;
 
@@ -223,6 +221,16 @@ const definition = {
         }),
 
         binary({
+            name: 'charging',
+            cluster: 'aminaControlCluster',
+            attribute: 'charging',
+            description: 'Power is being delivered to the EV',
+            valueOn: ['true', 1],
+            valueOff: ['false', 0],
+            access: 'STATE',
+        }),
+
+        binary({
             name: 'derated',
             cluster: 'aminaControlCluster',
             attribute: 'derated',
@@ -343,6 +351,25 @@ const definition = {
             'totalActiveEnergy',
             'lastSessionEnergy',
         ]);
+    },
+
+    onEvent: async (type, data, device) => {
+        if (
+            type === 'message' &&
+            data.type === 'attributeReport' &&
+            data.cluster === 'haElectricalMeasurement' &&
+            data.data['totalActivePower']
+        ) {
+            // Device does not support reporting of energy attributes, so we poll them manually when power is updated
+            await data.endpoint.read('aminaControlCluster', ['totalActiveEnergy']);
+        }
+
+        if (type === 'message' && data.type === 'attributeReport' && data.cluster === 'aminaControlCluster' && data.data['evStatus']) {
+            // Device does not support reporting of energy attributes, so we poll them manually when charging is stopped
+            if ((data.data['evStatus'] & (1 << 2)) === 0) {
+                await data.endpoint.read('aminaControlCluster', ['totalActiveEnergy', 'lastSessionEnergy']);
+            }
+        }
     },
 };
 
